@@ -1,0 +1,6 @@
+[submodule "third-party/lufa"]
+	path = third-party/lufa
+	url = https://github.com/abcminiuser/lufa
+[submodule "third-party/avrdude"]
+	path = third-party/avrdude
+	url = https://github.com/avrdudes/avrdude
