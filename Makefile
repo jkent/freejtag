@@ -8,20 +8,18 @@ TARGET       = bin/firmware
 CC_FLAGS     = -Iinclude -DUSE_LUFA_CONFIG_HEADER
 LD_FLAGS     =
 SRC          =              \
-	src/cdc.c               \
-	src/descriptors.c       \
-	src/jtag.c              \
-	src/main.c              \
 	$(LUFA_SRC_USB)         \
-	$(LUFA_SRC_USBCLASS)    \
+	src/descriptors.c       \
+	src/main.c              \
+	src/tap.c               \
 
 AVRDUDE_PROGRAMMER = stk500v2
 AVRDUDE_PORT = /dev/ttyUSB0
 AVRDUDE_BUAD = 115200
 
-# https://eleccelerator.com/fusecalc/fusecalc.php?chip=atmega16u2&LOW=EF&HIGH=D1&EXTENDED=FC&LOCKBIT=FF
-# LFUSE: Ext Osc 8MHz 16 CK + 4.1 ms
-AVRDUDE_LFUSE = 0xEF
+# https://eleccelerator.com/fusecalc/fusecalc.php?chip=atmega16u2&LOW=5E&HIGH=D1&EXTENDED=FC&LOCKBIT=FF
+# LFUSE: CLKDIV Ext Osc 8MHz 258 CK + 65 ms
+AVRDUDE_LFUSE = 0x5E
 # HFUSE: SPIEN EESAVE BOOTSZ=4KiB
 AVRDUDE_HFUSE = 0xD1
 # EFUSE: BODLEVEL=3.0v

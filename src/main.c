@@ -4,62 +4,86 @@
  * Copyright (C) 2026 Jeff Kent <jeff@jkent.net>
  */
 
+#include <assert.h>
 #include <avr/io.h>
 #include <avr/power.h>
 #include <LUFA/Drivers/USB/USB.h>
 
-#include "cdc.h"
 #include "descriptors.h"
-#include "jtag.h"
+#include "tap.h"
 
 
-static uint8_t USB_Device_LastConfigurationNumber = CONFIGURATION_NONE;
+uint8_t cdc_buf[32];
+int8_t cdc_bytes = 0;
 
 int main(void)
 {
+    clock_prescale_set(clock_div_1);
     USB_Init();
     GlobalInterruptEnable();
 
-    while (true) {
-        switch (USB_Device_ConfigurationNumber) {
-            case CONFIGURATION_CDC:
-            cdc_task();
-            jtag_task();
-            break;
-
+    while(true) {
+        Endpoint_SelectEndpoint(JTAG_RX_EPADDR);
+        if (Endpoint_IsOUTReceived()) {
+            uint8_t tap_bytes = Endpoint_BytesInEndpoint();
+            if (tap_bytes) {
+                uint8_t tap_buf[8];
+                Endpoint_Read_Stream_LE(tap_buf, tap_bytes, NULL);
+                tap_command(tap_buf, tap_bytes);
+                Endpoint_SelectEndpoint(JTAG_RX_EPADDR);
+            }
+            Endpoint_ClearOUT();
         }
 
-        USB_USBTask();
+        if (cdc_bytes == 0) {
+            Endpoint_SelectEndpoint(CDC_RX_EPADDR);
+            if (Endpoint_IsOUTReceived()) {
+                cdc_bytes = Endpoint_BytesInEndpoint();
+                if (cdc_bytes) {
+                    Endpoint_Read_Stream_LE(cdc_buf, cdc_bytes, NULL);
+                }
+                Endpoint_ClearOUT();
+            }
+        }
+
+        if (cdc_bytes > 0) {
+            Endpoint_SelectEndpoint(CDC_TX_EPADDR);
+            if (Endpoint_IsINReady()) {
+                Endpoint_WaitUntilReady();
+                Endpoint_Write_Stream_LE(cdc_buf, cdc_bytes, NULL);
+                Endpoint_ClearIN();
+                cdc_bytes = 0;
+            }
+        }
+
+        Endpoint_SelectEndpoint(ENDPOINT_CONTROLEP);
+        if (Endpoint_IsSETUPReceived()) {
+            USB_Device_ProcessControlRequest();
+        }
     }
 }
 
-void EVENT_USB_Device_ConfigurationChanged(void)
+void tap_response(const uint8_t *buf, uint8_t len, bool flush)
 {
-    // Unconfigure
-    switch (USB_Device_LastConfigurationNumber) {
-    case CONFIGURATION_CDC:
-        cdc_deinit();
-        jtag_deinit();
-        break;
-    }
+    assert(len > 0 && len <= JTAG_TXRX_EPSIZE);
 
-    // Configure
-    switch (USB_Device_ConfigurationNumber) {
-    case CONFIGURATION_CDC:
-        cdc_init();
-        jtag_init();
-        break;
-    }
+    Endpoint_SelectEndpoint(JTAG_TX_EPADDR);
+    Endpoint_WaitUntilReady();
+    Endpoint_Write_Stream_LE(buf, len, NULL);
 
-    USB_Device_LastConfigurationNumber = USB_Device_ConfigurationNumber;
+    if (flush) {
+        if (!Endpoint_IsReadWriteAllowed()) {
+            Endpoint_ClearIN();
+            Endpoint_WaitUntilReady();
+        }
+    }
+    Endpoint_ClearIN();
 }
 
-void EVENT_USB_Device_ControlRequest(void)
+void EVENT_USB_Device_ConfigurationChanged()
 {
-    switch (USB_Device_ConfigurationNumber) {
-    case CONFIGURATION_CDC:
-        cdc_control_request();
-        jtag_control_request();
-        break;
-    }
+    Endpoint_ConfigureEndpoint(JTAG_TX_EPADDR, EP_TYPE_BULK, JTAG_TXRX_EPSIZE, 1);
+    Endpoint_ConfigureEndpoint(JTAG_RX_EPADDR, EP_TYPE_BULK, JTAG_TXRX_EPSIZE, 1);
+    Endpoint_ConfigureEndpoint(CDC_TX_EPADDR, EP_TYPE_BULK, CDC_TXRX_EPSIZE, 2);
+    Endpoint_ConfigureEndpoint(CDC_RX_EPADDR, EP_TYPE_BULK, CDC_TXRX_EPSIZE, 2);
 }

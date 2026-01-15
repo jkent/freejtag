@@ -9,7 +9,8 @@
             "defines": [
                 "__AVR_ATmega16U2__",
                 "USE_LUFA_CONFIG_HEADER",
-                "F_CPU=8000000"
+                "F_CPU=8000000",
+                "__uint24=uint32_t"
             ],
             "compilerPath": "/usr/bin/avr-gcc",
             "cStandard": "c17",
