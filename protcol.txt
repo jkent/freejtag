@@ -1,0 +1,35 @@
+Interface Vendor Control Requests
+=========================================
+bRequest  direction description
+-------- --------- ----------------------
+0x00     IN        Version
+0x02     OUT       Reset
+0x03     OUT       Execute
+0x04     IN        Read buf
+0x05     OUT & IN  Bulk byte
+=== Extensions ===
+0x80     IN        Read OCDR
+
+Commands for Execute
+=========================================
+------ wValue ------
+cmd  arg mask/name   description
+---- --------------- ------------------------
+=== NO DATA ===
+0x00 0x00     null   nop
+0x01 0x01     bool   detach attach
+0x02 0x01     bool   set tdi
+0x03 0x01     bool   set tms
+0x04 0x0f     state  set state
+0x05 0xff     cycles clock
+0x06 0xff     bits   shift
+0x07 0xff     bits   shift and exit
+=== OUT ===
+0x40 0xff     bits   shift out
+0x41 0xff     bits   shift out and exit
+=== IN ===
+0x80 0xff     bits   shift in
+0x81 0xff     bits   shift in and exit
+=== OUT/IN ===
+0xC0 0xff     bits   shift out/in
+0xC1 0xff     bits   shift out/in and exit

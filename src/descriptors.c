@@ -32,7 +32,7 @@ const USB_Descriptor_Device_t EEMEM DeviceDescriptor =
     .NumberOfConfigurations = FIXED_NUM_CONFIGURATIONS
 };
 
-const USB_Descriptor_Configuration_t EEMEM CDC_ConfigurationDescriptor =
+const USB_Descriptor_Configuration_t EEMEM ConfigurationDescriptor =
 {
     .Config = {
         .Header = {
@@ -40,19 +40,19 @@ const USB_Descriptor_Configuration_t EEMEM CDC_ConfigurationDescriptor =
             .Type    = DTYPE_Configuration,
         },
         .TotalConfigurationSize = sizeof(USB_Descriptor_Configuration_t),
-        .TotalInterfaces        = 3,
+        .TotalInterfaces        = INTERFACE_COUNT,
         .ConfigurationNumber    = 1,
         .ConfigurationStrIndex  = NO_DESCRIPTOR,
         .ConfigAttributes       = USB_CONFIG_ATTR_RESERVED,
         .MaxPowerConsumption    = USB_CONFIG_POWER_MA(100),
     },
 
-    .CDC_CCI_Interface = {
+    .CCI_Interface = {
         .Header = {
-            .Size    = sizeof(USB_Descriptor_Interface_t),
-            .Type    = DTYPE_Interface,
+            .Size   = sizeof(USB_Descriptor_Interface_t),
+            .Type   = DTYPE_Interface,
         },
-        .InterfaceNumber        = INTERFACE_ID_CDC_CCI,
+        .InterfaceNumber        = INTERFACE_ID_CCI,
         .AlternateSetting       = 0,
         .TotalEndpoints         = 1,
         .Class                  = CDC_CSCP_CDCClass,
@@ -61,119 +61,107 @@ const USB_Descriptor_Configuration_t EEMEM CDC_ConfigurationDescriptor =
         .InterfaceStrIndex      = NO_DESCRIPTOR,
     },
 
-    .CDC_Functional_Header = {
+    .CCI_Functional_Header = {
         .Header = {
-            .Size    = sizeof(USB_CDC_Descriptor_FunctionalHeader_t),
-            .Type    = CDC_DTYPE_CSInterface,
+            .Size   = sizeof(USB_CDC_Descriptor_FunctionalHeader_t),
+            .Type   = CDC_DTYPE_CSInterface,
         },
-        .Subtype = CDC_DSUBTYPE_CSInterface_Header,
+        .Subtype                = CDC_DSUBTYPE_CSInterface_Header,
         .CDCSpecification       = VERSION_BCD(1,1,0),
     },
 
-    .CDC_Functional_ACM = {
+    .CCI_Functional_ACM = {
         .Header = {
-            .Size    = sizeof(USB_CDC_Descriptor_FunctionalACM_t),
-            .Type    = CDC_DTYPE_CSInterface,
+            .Size   = sizeof(USB_CDC_Descriptor_FunctionalACM_t),
+            .Type   = CDC_DTYPE_CSInterface,
         },
         .Subtype                = CDC_DSUBTYPE_CSInterface_ACM,
         .Capabilities           = 0,
     },
 
-    .CDC_Functional_Union = {
+    .CCI_Functional_Union = {
         .Header = {
-            .Size    = sizeof(USB_CDC_Descriptor_FunctionalUnion_t),
-            .Type    = CDC_DTYPE_CSInterface,
+            .Size   = sizeof(USB_CDC_Descriptor_FunctionalUnion_t),
+            .Type   = CDC_DTYPE_CSInterface,
         },
-        .Subtype = CDC_DSUBTYPE_CSInterface_Union,
-        .MasterInterfaceNumber  = INTERFACE_ID_CDC_CCI,
-        .SlaveInterfaceNumber   = INTERFACE_ID_CDC_DCI,
+        .Subtype                = CDC_DSUBTYPE_CSInterface_Union,
+        .MasterInterfaceNumber  = INTERFACE_ID_CCI,
+        .SlaveInterfaceNumber   = INTERFACE_ID_DCI,
     },
 
-    .CDC_NotificationEndpoint = {
+    .CCI_DataInEndpoint = {
         .Header = {
-            .Size    = sizeof(USB_Descriptor_Endpoint_t),
-            .Type    = DTYPE_Endpoint,
+            .Size   = sizeof(USB_Descriptor_Endpoint_t),
+            .Type   = DTYPE_Endpoint,
         },
-        .EndpointAddress        = CDC_NOTIFICATION_EPADDR,
-        .Attributes             = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
-        .EndpointSize           = CDC_NOTIFICATION_EPSIZE,
-        .PollingIntervalMS      = 0xff,
+        .EndpointAddress    = CCI_EPADDR,
+        .Attributes         = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC |
+                                                        ENDPOINT_USAGE_DATA),
+        .EndpointSize       = CCI_EPSIZE,
+        .PollingIntervalMS  = 0xff,
     },
 
-    .CDC_DCI_Interface = {
+    .DCI_Interface = {
         .Header = {
             .Size   = sizeof(USB_Descriptor_Interface_t),
             .Type   = DTYPE_Interface,
         },
-        .InterfaceNumber    = INTERFACE_ID_CDC_DCI,
+        .InterfaceNumber    = INTERFACE_ID_DCI,
         .AlternateSetting   = 0,
         .TotalEndpoints     = 2,
         .Class              = CDC_CSCP_CDCDataClass,
         .SubClass           = CDC_CSCP_NoDataSubclass,
         .Protocol           = CDC_CSCP_NoDataProtocol,
-        .InterfaceStrIndex  = STRING_ID_DataInterface,
+        .InterfaceStrIndex  = STRING_ID_DCIInterface,
     },
 
-    .CDC_DataOutEndpoint = {
+    .DCI_DataOutEndpoint = {
         .Header = {
             .Size   = sizeof(USB_Descriptor_Endpoint_t),
             .Type   = DTYPE_Endpoint,
         },
-        .EndpointAddress    = CDC_RX_EPADDR,
-        .Attributes         = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
-        .EndpointSize       = CDC_TXRX_EPSIZE,
+        .EndpointAddress    = DCI_RX_EPADDR,
+        .Attributes         = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC |
+                                                        ENDPOINT_USAGE_DATA),
+        .EndpointSize       = DCI_TXRX_EPSIZE,
     },
 
-    .CDC_DataInEndpoint = {
+    .DCI_DataInEndpoint = {
         .Header = {
             .Size   = sizeof(USB_Descriptor_Endpoint_t),
             .Type   = DTYPE_Endpoint,
         },
-        .EndpointAddress    = CDC_TX_EPADDR,
-        .Attributes         = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
-        .EndpointSize       = CDC_TXRX_EPSIZE,
+        .EndpointAddress    = DCI_TX_EPADDR,
+        .Attributes         = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC |
+                                                        ENDPOINT_USAGE_DATA),
+        .EndpointSize       = DCI_TXRX_EPSIZE,
     },
 
-    .JTAG_Interface = {
+    .FreeJTAG_Interface = {
         .Header = {
             .Size   = sizeof(USB_Descriptor_Interface_t),
             .Type   = DTYPE_Interface,
         },
-        .InterfaceNumber    = INTERFACE_ID_JTAG,
+        .InterfaceNumber    = INTERFACE_ID_FREEJTAG,
         .AlternateSetting   = 0,
-        .TotalEndpoints     = 2,
+        .TotalEndpoints     = 0,
         .Class              = USB_CSCP_VendorSpecificClass,
         .SubClass           = USB_CSCP_NoDeviceSubclass,
         .Protocol           = USB_CSCP_NoDeviceProtocol,
-        .InterfaceStrIndex  = STRING_ID_JTAGInterface,
-    },
-
-    .JTAG_DataOutEndpoint = {
-        .Header = {
-            .Size   = sizeof(USB_Descriptor_Endpoint_t),
-            .Type   = DTYPE_Endpoint,
-        },
-        .EndpointAddress    = JTAG_RX_EPADDR,
-        .Attributes         = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
-        .EndpointSize       = JTAG_TXRX_EPSIZE,
-    },
-
-    .JTAG_DataInEndpoint = {
-        .Header = {
-            .Size   = sizeof(USB_Descriptor_Endpoint_t),
-            .Type   = DTYPE_Endpoint,
-        },
-        .EndpointAddress    = JTAG_TX_EPADDR,
-        .Attributes         = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
-        .EndpointSize       = JTAG_TXRX_EPSIZE,
+        .InterfaceStrIndex  = STRING_ID_FreeJTAGInterface,
     },
 };
 
-const USB_Descriptor_String_t EEMEM LanguageString = USB_STRING_DESCRIPTOR_ARRAY(LANGUAGE_ID_ENG);
-const USB_Descriptor_String_t EEMEM ManufacturerString = USB_STRING_DESCRIPTOR(L"Jeff Kent <jeff@jkent.net>");
-const USB_Descriptor_String_t EEMEM ProductString = USB_STRING_DESCRIPTOR(L"SRXE Basestation with FreeJTAG");
-const USB_Descriptor_String_t EEMEM DataInterfaceString = USB_STRING_DESCRIPTOR(L"FreeJTAG CDC Interface");
-const USB_Descriptor_String_t EEMEM JTAGInterfaceString = USB_STRING_DESCRIPTOR(L"FreeJTAG TAP Interface");
+const USB_Descriptor_String_t EEMEM LanguageString =
+        USB_STRING_DESCRIPTOR_ARRAY(LANGUAGE_ID_ENG);
+const USB_Descriptor_String_t EEMEM ManufacturerString =
+        USB_STRING_DESCRIPTOR(L"Jeff Kent <jeff@jkent.net>");
+const USB_Descriptor_String_t EEMEM ProductString =
+        USB_STRING_DESCRIPTOR(L"SRXE Basestation");
+const USB_Descriptor_String_t EEMEM DCIInterfaceString =
+        USB_STRING_DESCRIPTOR(L"CDC ACM Interface");
+const USB_Descriptor_String_t EEMEM FreeJTAGInterfaceString =
+        USB_STRING_DESCRIPTOR(L"FreeJTAG Interface");
 
 uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
                                     const uint16_t wIndex,
@@ -191,7 +179,7 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
         Size    = sizeof(USB_Descriptor_Device_t);
         break;
     case DTYPE_Configuration:
-        Address = &CDC_ConfigurationDescriptor;
+        Address = &ConfigurationDescriptor;
         Size = sizeof(USB_Descriptor_Configuration_t);
         break;
     case DTYPE_String:
@@ -211,24 +199,26 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
         case STRING_ID_Serial: {
             struct {
                 USB_Descriptor_Header_t Header;
-                uint16_t                UnicodeString[INTERNAL_SERIAL_LENGTH_BITS / 4 + 20];
+                uint16_t UnicodeString[INTERNAL_SERIAL_LENGTH_BITS / 4 + 20];
             } SignatureDescriptor;
             SignatureDescriptor.Header.Type = DTYPE_String;
-            SignatureDescriptor.Header.Size = USB_STRING_LEN(INTERNAL_SERIAL_LENGTH_BITS / 4);
+            SignatureDescriptor.Header.Size =
+                    USB_STRING_LEN(INTERNAL_SERIAL_LENGTH_BITS / 4);
             memcpy(SignatureDescriptor.UnicodeString, L"jkent.net:", 20);
             USB_Device_GetSerialString(SignatureDescriptor.UnicodeString + 10);
             Endpoint_ClearSETUP();
-            Endpoint_Write_Control_Stream_LE(&SignatureDescriptor, sizeof(SignatureDescriptor));
+            Endpoint_Write_Control_Stream_LE(&SignatureDescriptor,
+                    sizeof(SignatureDescriptor));
             Endpoint_ClearOUT();
             break;
         }
-        case STRING_ID_DataInterface:
-            Address = &DataInterfaceString;
-            Size    = DataInterfaceString.Header.Size;
+        case STRING_ID_DCIInterface:
+            Address = &DCIInterfaceString;
+            Size    = DCIInterfaceString.Header.Size;
             break;
-        case STRING_ID_JTAGInterface:
-            Address = &JTAGInterfaceString;
-            Size    = JTAGInterfaceString.Header.Size;
+        case STRING_ID_FreeJTAGInterface:
+            Address = &FreeJTAGInterfaceString;
+            Size    = FreeJTAGInterfaceString.Header.Size;
             break;
         }
         break;

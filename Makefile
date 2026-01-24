@@ -9,9 +9,10 @@ CC_FLAGS     = -Iinclude -DUSE_LUFA_CONFIG_HEADER
 LD_FLAGS     =
 SRC          =              \
 	$(LUFA_SRC_USB)         \
+	src/cdcacm.c            \
 	src/descriptors.c       \
+	src/freejtag.c          \
 	src/main.c              \
-	src/tap.c               \
 
 AVRDUDE_PROGRAMMER = stk500v2
 AVRDUDE_PORT = /dev/ttyUSB0

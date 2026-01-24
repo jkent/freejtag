@@ -1,4 +1,5 @@
-from sys import stderr, stdout
+from sys import stderr
+from time import sleep
 
 import usb.core
 import usb.util
@@ -17,169 +18,176 @@ AVR_IR_PRIVATE3         = 11
 AVR_IR_RESET            = 12
 AVR_IR_BYPASS           = 15
 
-class CDC:
-    def __init__(self, device):
-        interfaces = map(lambda i: device.config[(i, 0)], range(device.config.bNumInterfaces))
-        interfaces = filter(device.match_interface_string_re(r'^FreeJTAG CDC Interface$'), interfaces)
+class CDCACM:
+    def __init__(self, dev):
+        self._dev: usb.core.Device = dev._dev
+        self._config: usb.core.Configuration = dev._config
+        interfaces = map(lambda i: self._config[(i, 0)], range(self._config.bNumInterfaces))
+        interfaces = filter(dev.match_interface_string_re(r'^CDC ACM Interface$'), interfaces)
         try:
-            self.intf: usb.core.Interface = tuple(interfaces)[0]
+            self._intf: usb.core.Interface = tuple(interfaces)[0]
         except:
-            print('FreeJTAG CDC interface was not found', file=stderr)
+            print('CDC ACM interface was not found', file=stderr)
             exit(1)
 
     def __enter__(self):
-        self._reattach = self.intf.device.is_kernel_driver_active(self.intf.bInterfaceNumber)
+        self._reattach = self._dev.is_kernel_driver_active(self._intf.bInterfaceNumber)
         if self._reattach:
-            self.intf.device.detach_kernel_driver(self.intf.bInterfaceNumber)
-        usb.util.claim_interface(self.intf.device, self.intf.bInterfaceNumber)
-        self.ep_out = usb.util.find_descriptor(self.intf, custom_match = \
+            self._dev.detach_kernel_driver(self._intf.bInterfaceNumber)
+        usb.util.claim_interface(self._intf.device, self._intf)
+        self.ep_out = usb.util.find_descriptor(self._intf, custom_match = \
                 lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == \
                 usb.util.ENDPOINT_OUT)
-        self.ep_in = usb.util.find_descriptor(self.intf, custom_match = \
+        self.ep_in = usb.util.find_descriptor(self._intf, custom_match = \
                 lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == \
                 usb.util.ENDPOINT_IN)
+        sleep(0.1)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.ep_out = None
         self.ep_in = None
-        usb.util.release_interface(self.intf.device, self.intf.bInterfaceNumber)
+        usb.util.release_interface(self._dev, self._intf)
         if self._reattach:
-            self.intf.device.attach_kernel_driver(self.intf.bInterfaceNumber-1)
+            self._dev.attach_kernel_driver(self._intf.bInterfaceNumber-1)
 
     def write(self, data):
         self.ep_out.write(data)
 
-    def read(self, len):
-        return bytes(self.ep_in.read(len))
+    def read(self, count=4096):
+        return bytes(self.ep_in.read(count))
 
-class Tap:
-    CMD_NOP             = 0
-    CMD_VERSION         = 1
-    CMD_ATTACH          = 2
-    CMD_SET_STATE       = 3
-    CMD_CLOCK           = 4
-    CMD_CLOCK_OUT       = 5
-    CMD_CLOCK_IN        = 6
-    CMD_CLOCK_OUTIN     = 7
-    CMD_BULK_LOAD_BYTES = 8
-    CMD_BULK_READ_BYTES = 9
-    CMD_AVR_READ_OCDR   = 128
-    CMD_RESET           = 255
+class FreeJTAG:
+    REQ_VERSION             = 0x00
+    REQ_RESET               = 0x01
+    REQ_EXECUTE             = 0x02
+    REQ_READBUF             = 0x03
+    REQ_BULKBYTE            = 0x04
+    REQ_READOCDR            = 0x80
 
-    STATE_UNNKOWN       = 0
-    STATE_RESET         = 1
-    STATE_RUNIDLE       = 2
-    STATE_DRSELECT      = 3
-    STATE_DRCAPTURE     = 4
-    STATE_DRSHIFT       = 5
-    STATE_DREXIT1       = 6
-    STATE_DRPAUSE       = 7
-    STATE_DREXIT2       = 8
-    STATE_DRUPDATE      = 9
-    STATE_IRSELECT      = 10
-    STATE_IRCAPTURE     = 11
-    STATE_IRSHIFT       = 12
-    STATE_IREXIT1       = 13
-    STATE_IRPAUSE       = 14
-    STATE_IREXIT2       = 15
-    STATE_IRUPDATE      = 16
+    CMD_NOP                 = 0x00
+    CMD_ATTACH              = 0x01
+    CMD_SET_TDI             = 0x02
+    CMD_SET_TMS             = 0x03
+    CMD_SET_STATE           = 0x04
+    CMD_CLOCK               = 0x05
+    CMD_SHIFT               = 0x06
+    CMD_SHIFT_EXIT          = 0x07
+    CMD_SHIFT_OUT           = 0x40
+    CMD_SHIFT_OUT_EXIT      = 0x41
+    CMD_SHIFT_IN            = 0x80
+    CMD_SHIFT_IN_EXIT       = 0x81
+    CMD_SHIFT_OUTIN         = 0xC0
+    CMD_SHIFT_OUTIN_EXIT    = 0xC1
 
-    def __init__(self, device):
-        interfaces = map(lambda i: device.config[(i, 0)], range(device.config.bNumInterfaces))
-        interfaces = tuple(filter(device.match_interface_string_re(r'^FreeJTAG TAP Interface$'), interfaces))
+    STATE_RESET             = 0x00
+    STATE_RUNIDLE           = 0x01
+    STATE_DRSELECT          = 0x02
+    STATE_DRCAPTURE         = 0x03
+    STATE_DRSHIFT           = 0x04
+    STATE_DREXIT1           = 0x05
+    STATE_DRPAUSE           = 0x06
+    STATE_DREXIT2           = 0x07
+    STATE_DRUPDATE          = 0x08
+    STATE_IRSELECT          = 0x09
+    STATE_IRCAPTURE         = 0x0A
+    STATE_IRSHIFT           = 0x0B
+    STATE_IREXIT1           = 0x0C
+    STATE_IRPAUSE           = 0x0D
+    STATE_IREXIT2           = 0x0E
+    STATE_IRUPDATE          = 0x0F
+    STATE_UNKNOWN           = 0x10
+
+    def __init__(self, dev):
+        self._dev: usb.core.Device = dev._dev
+        self._config: usb.core.Configuration = dev._config
+        interfaces = map(lambda i: self._config[(i, 0)], range(self._config.bNumInterfaces))
+        interfaces = tuple(filter(dev.match_interface_string_re(r'^FreeJTAG Interface$'), interfaces))
         try:
-            self.intf: usb.core.Interface = interfaces[0]
+            self._intf: usb.core.Interface = interfaces[0]
         except:
-            print('FreeJTAG TAP interface was not found', file=stderr)
+            print('FreeJTAG interface was not found', file=stderr)
             exit(1)
 
     def __enter__(self):
-        usb.util.claim_interface(self.intf.device, self.intf.bInterfaceNumber)
-        self.ep_out = usb.util.find_descriptor(self.intf, custom_match = \
-                lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == \
-                usb.util.ENDPOINT_OUT)
-        self.ep_in = usb.util.find_descriptor(self.intf, custom_match = \
-                lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == \
-                usb.util.ENDPOINT_IN)
-
-        # flush endpoints
-        for i in range(33):
-           try:
-               self.ep_in.read(8, timeout=1)
-           except:
-               pass
-           try:
-               self.ep_out.write(b'\xff', timeout=1)
-           except:
-               pass
-
-        self.attach(True)
+        usb.util.claim_interface(self._dev, self._intf)
+        self._attach(True)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.attach(False)
-        self.ep_out = None
-        self.ep_in = None
-        usb.util.release_interface(self.intf.device, self.intf.bInterfaceNumber)
+        self._attach(False)
+        usb.util.release_interface(self._dev, self._intf)
 
     def version(self):
-        self.ep_out.write(bytes((self.CMD_VERSION,)))
-        data = self.ep_in.read(2)
+        bmRequestType = usb.util.build_request_type(
+            usb.util.CTRL_IN,
+            usb.util.CTRL_TYPE_VENDOR,
+            usb.util.CTRL_RECIPIENT_INTERFACE)
+        data = self._dev.ctrl_transfer(bmRequestType, self.REQ_VERSION, 0,
+                self._intf.bInterfaceNumber, 2)
         value = int.from_bytes(data, 'little')
         major = (value & 0xFF00) >> 8
         minor = (value & 0xF0) >> 4
         patch = (value & 0xF)
         return major, minor, patch
 
-    def attach(self, value=True):
-        value = bool(value)
-        self.ep_out.write(bytes((self.CMD_ATTACH, value)))
-        if value:
-            self.state = self.STATE_RESET
+    def _execute(self, cmd, arg, data=None):
+        bmRequestType = usb.util.build_request_type(
+            usb.util.CTRL_OUT,
+            usb.util.CTRL_TYPE_VENDOR,
+            usb.util.CTRL_RECIPIENT_INTERFACE)
+        wValue = (arg << 8) | (cmd & 0xff)
+        self._dev.ctrl_transfer(bmRequestType, self.REQ_EXECUTE, wValue,
+                self._intf.bInterfaceNumber, data)
 
-    def set_state(self, new_state):
-        self.ep_out.write(bytes((self.CMD_SET_STATE, new_state)))
-        self.state = self.ep_in.read(1)[0]
-        assert(self.state == new_state)
-        return self.state
+    def _readbuf(self, wLength):
+        bmRequestType = usb.util.build_request_type(
+            usb.util.CTRL_IN,
+            usb.util.CTRL_TYPE_VENDOR,
+            usb.util.CTRL_RECIPIENT_INTERFACE)
+        return self._dev.ctrl_transfer(bmRequestType, self.REQ_READBUF, 0,
+                self._intf.bInterfaceNumber, wLength)
 
-    def shift(self, total_bits) -> None:
-        for i in range(0, total_bits, 32):
-            bits = min(total_bits - i, 32)
-            exit = True if i + 32 >= total_bits else False
-            self.ep_out.write(bytes((self.CMD_CLOCK, bits, exit)))
+    def _attach(self, attach=True):
+        self._execute(self.CMD_ATTACH, attach)
 
-    def shift_out(self, total_bits, value: int) -> None:
-        for i in range(0, total_bits, 32):
-            bits = min(total_bits - i, 32)
-            nbytes = (bits + 7) // 8
-            exit = True if i + 32 >= total_bits else False
-            chunk = (value >> i) & ((1 << bits) - 1)
-            self.ep_out.write(bytes((self.CMD_CLOCK_OUT, bits, exit)) + \
-                    chunk.to_bytes(nbytes, 'little'))
+    def set_tdi(self, value=True):
+        self._execute(self.CMD_SET_TDI, value)
 
-    def shift_in(self, total_bits) -> int:
-        data = b''
-        for i in range(0, total_bits, 32):
-            bits = min(total_bits - i, 32)
-            nbytes = (bits + 7) // 8
-            exit = True if i + 32 >= total_bits else False
-            self.ep_out.write(bytes((self.CMD_CLOCK_IN, bits, exit)))
-            data = bytes(self.ep_in.read(nbytes)) + data
-        return int.from_bytes(data, 'little') & (1 << total_bits) - 1
+    def set_tms(self, value=True):
+        self._execute(self.CMD_SET_MS, value)
 
-    def shift_outin(self, total_bits, value: int) -> int:
-        data = b''
-        for i in range(0, total_bits, 32):
-            bits = min(total_bits - i, 32)
-            nbytes = (bits + 7) // 8
-            exit = True if i + 32 >= total_bits else False
-            chunk = (value >> i) & ((1 << bits) - 1)
-            self.ep_out.write(bytes((self.CMD_CLOCK_OUTIN, bits, exit)) + \
-                    chunk.to_bytes(nbytes, 'little'))
-            data = bytes(self.ep_in.read(nbytes)) + data
-        return int.from_bytes(data, 'little') & (1 << total_bits) - 1
+    def set_state(self, state):
+        self._execute(self.CMD_SET_STATE, state)
+        self._state = state
+
+    def clock(self, cycles):
+        self._execute(self.CMD_CLOCK, cycles - 1)
+
+    def shift(self, bits, exit=True):
+        cmd = self.CMD_SHIFT_EXIT if exit else self.CMD_SHIFT
+        self._execute(cmd, bits - 1)
+
+    def shift_out(self, bits, value: int, exit=True):
+        cmd = self.CMD_SHIFT_OUT_EXIT if exit else self.CMD_SHIFT_OUT
+        n_bytes = (bits + 7) // 8
+        data = value.to_bytes(n_bytes, 'little')
+        self._execute(cmd, bits - 1, data)
+
+    def shift_in(self, bits, exit=True):
+        cmd = self.CMD_SHIFT_IN_EXIT if exit else self.CMD_SHIFT_IN
+        n_bytes = (bits + 7) // 8
+        self._execute(cmd, bits - 1)
+        data = self._readbuf(n_bytes)
+        return int.from_bytes(data, 'little') & ((1 << bits) - 1)
+
+    def shift_outin(self, bits, value, exit=True):
+        cmd = self.CMD_SHIFT_OUTIN_EXIT if exit else self.CMD_SHIFT_OUTIN
+        n_bytes = (bits + 7) // 8
+        data = value.to_bytes(n_bytes, 'little')
+        self._execute(cmd, bits - 1, data)
+        data = self._readbuf(n_bytes)
+        return int.from_bytes(data, 'little') & ((1 << bits) - 1)
 
     def shift_ir(self, total_bits, value=None, read=False) -> None | int:
         result = None
@@ -209,27 +217,63 @@ class Tap:
         self.set_state(self.STATE_RUNIDLE)
         return result
 
-    def bulk_load_bytes(self, count: int, data: bytes) -> None:
-        assert(len(data) == count)
-        self.ep_out.write(bytes((self.CMD_BULK_LOAD_BYTES,)) + \
-                count.to_bytes(2, 'little'))
-        self.ep_out.write(data)
+    def write_bytes(self, data: bytes) -> None:
+        bmRequestType = usb.util.build_request_type(
+            usb.util.CTRL_OUT,
+            usb.util.CTRL_TYPE_VENDOR,
+            usb.util.CTRL_RECIPIENT_INTERFACE)
+        while True:
+            chunk, data = data[:32], data[32:]
+            if not chunk:
+                break
+            self._dev.ctrl_transfer(bmRequestType, self.REQ_BULKBYTE, 0,
+                    self._intf.bInterfaceNumber, chunk)
 
     def bulk_read_bytes(self, count: int) -> bytes:
-        self.ep_out.write(bytes((self.CMD_BULK_READ_BYTES,)) + \
-                count.to_bytes(2, 'little'))
-        data = bytes(self.ep_in.read(count))
+        bmRequestType = usb.util.build_request_type(
+            usb.util.CTRL_IN,
+            usb.util.CTRL_TYPE_VENDOR,
+            usb.util.CTRL_RECIPIENT_INTERFACE)
+        data = b''
+        while count > 0:
+            chunk = min(32, count)
+            data += self._dev.ctrl_transfer(bmRequestType, self.REQ_BULKBYTE, 0,
+                    self._intf.bInterfaceNumber, chunk)
+            count -= chunk
         return data
 
     def avr_read_ocdr(self):
-        self.ep_out.write(bytes((self.CMD_AVR_READ_OCDR,)))
-        data = bytes(self.ep_in.read(2))
+        bmRequestType = usb.util.build_request_type(
+            usb.util.CTRL_IN,
+            usb.util.CTRL_TYPE_VENDOR,
+            usb.util.CTRL_RECIPIENT_INTERFACE)
+        data = self._dev.ctrl_transfer(bmRequestType, self.REQ_READOCDR, 0,
+                self._intf.bInterfaceNumber, 2)
         ch = int.from_bytes(data, 'little', signed=True)
         if ch < 0:
             return None
         return bytes((ch,))
 
-class FreeJTAG:
+class Device:
+    def __init__(self, vid=0x16c0, pid=0x27dd, index=0):
+        devices = tuple(usb.core.find(idVendor=vid, idProduct=pid, find_all=True))
+        if not tuple(devices):
+            print('No devices found', file=stderr)
+            exit(1)
+        devices = filter(self.match_serial_string_prefix('jkent.net'), devices)
+        devices = tuple(devices)
+        if not devices:
+            print('No devices found', file=stderr)
+            exit(1)
+
+        try:
+            self._dev: usb.core.Device = devices[index]
+        except IndexError:
+            print('Invalid FreeJTAG device index', file=stderr)
+            exit(1)
+
+        self._config: usb.core.Configuration = self._dev.get_active_configuration()
+
     def get_default_language_id(self, device: usb.core.Device):
         try:
             lang_id = usb.util.get_langids(device)[0]
@@ -269,41 +313,21 @@ class FreeJTAG:
             return bool(m)
         return match
 
-    def __init__(self, vid=0x16c0, pid=0x27dd, index=0):
-        devices = tuple(usb.core.find(idVendor=vid, idProduct=pid, find_all=True))
-        if not tuple(devices):
-            print('No FreeJTAG devices found', file=stderr)
-            exit(1)
-        devices = filter(self.match_serial_string_prefix('jkent.net'), devices)
-        devices = filter(self.match_product_string_re(r'\bFreeJTAG\b'), devices)
-        devices = tuple(devices)
-        if not devices:
-            print('No FreeJTAG devices found', file=stderr)
-            exit(1)
-
-        try:
-            self.dev: usb.core.Device = devices[index]
-        except IndexError:
-            print('Invalid FreeJTAG device index', file=stderr)
-            exit(1)
-
-        self.config: usb.core.Configuration = self.dev.get_active_configuration()
+    @property
+    def cdcacm(self):
+        if hasattr(self, '_cdcacm'):
+            return self._cdcacm
+        self._cdcacm = CDCACM(self)
+        return self._cdcacm
 
     @property
-    def cdc(self):
-        if hasattr(self, '_cdc'):
-            return self._cdc
-        self._cdc = CDC(self)
-        return self._cdc
+    def freejtag(self):
+        if hasattr(self, '_jtag'):
+            return self._jtag
+        self._jtag = FreeJTAG(self)
+        return self._jtag
 
-    @property
-    def tap(self):
-        if hasattr(self, '_tap'):
-            return self._tap
-        self._tap = Tap(self)
-        return self._tap
-
-def read_signature(jtag: Tap):
+def read_signature(jtag: FreeJTAG):
     jtag.shift_ir(4, AVR_IR_PROG_COMMANDS)
     def read_byte(addr):
         jtag.shift_dr(15, 0b0100011_00001000)
@@ -317,37 +341,37 @@ def read_signature(jtag: Tap):
     return signature
 
 if __name__ == '__main__':
-    freejtag = FreeJTAG()
+    device = Device()
 
-    with freejtag.tap as tap:
-        print(tap.version())
+    with device.freejtag as jtag:
+        print(jtag.version())
 
-        tap.shift_ir(4, AVR_IR_IDCODE)
-        idcode = tap.shift_dr(32, read=True)
+        jtag.shift_ir(4, AVR_IR_IDCODE)
+        idcode = jtag.shift_dr(32, read=True)
         print(f'IDCODE = 0x{idcode:08X}')
 
-        tap.shift_ir(4, AVR_IR_RESET)
-        tap.shift_dr(1, 1)
+        jtag.shift_ir(4, AVR_IR_RESET)
+        jtag.shift_dr(1, 1)
 
-        tap.shift_ir(4, AVR_IR_PROG_ENABLE)
-        tap.shift_dr(16, 0xa370)
+        jtag.shift_ir(4, AVR_IR_PROG_ENABLE)
+        jtag.shift_dr(16, 0xa370)
 
-        sig = read_signature(tap).to_bytes(3, 'little')
+        sig = read_signature(jtag).to_bytes(3, 'little')
         print('Signature: ' + ' '.join(f'{byte:02X}' for byte in sig))
 
-        tap.shift_ir(4, AVR_IR_PROG_ENABLE)
-        tap.shift_dr(16, 0)
+        jtag.shift_ir(4, AVR_IR_PROG_ENABLE)
+        jtag.shift_dr(16, 0)
 
-        tap.shift_ir(4, AVR_IR_RESET)
-        tap.shift_dr(1, 0)
+        jtag.shift_ir(4, AVR_IR_RESET)
+        jtag.shift_dr(1, 0)
 
-    with freejtag.cdc as cdc:
-        cdc.write('test')
-        print(cdc.read(4))
+    with device.cdcacm as serial:
+        serial.write(b'test')
+        print(serial.read())
 
-    with freejtag.tap as tap:
+    with device.freejtag as jtag:
         while True:
-            ch = tap.avr_read_ocdr()
+            ch = jtag.avr_read_ocdr()
             if ch is not None:
-                stdout.buffer.write(ch)
-                stdout.buffer.flush()
+                stderr.buffer.write(ch)
+                stderr.buffer.flush()

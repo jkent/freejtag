@@ -10,5 +10,7 @@
 #include <stdint.h>
 
 
-extern void tap_command(const uint8_t *buf, uint8_t len);
-extern void tap_response(const uint8_t *buf, uint8_t len, bool flush);
+extern void FreeJTAG_Init(void);
+extern void FreeJTAG_Task(void);
+extern void FreeJTAG_Configure(void);
+extern void FreeJTAG_ControlRequest(void);
