@@ -27,7 +27,9 @@ const USB_Descriptor_Device_t EEMEM DeviceDescriptor =
 
     .ManufacturerStrIndex   = STRING_ID_Manufacturer,
     .ProductStrIndex        = STRING_ID_Product,
+#if !defined(NO_INTERNAL_SERIAL)
     .SerialNumStrIndex      = STRING_ID_Serial,
+#endif
 
     .NumberOfConfigurations = FIXED_NUM_CONFIGURATIONS
 };
@@ -47,6 +49,7 @@ const USB_Descriptor_Configuration_t EEMEM ConfigurationDescriptor =
         .MaxPowerConsumption    = USB_CONFIG_POWER_MA(100),
     },
 
+#if !defined(CONTROL_ONLY_DEVICE)
     .CCI_Interface = {
         .Header = {
             .Size   = sizeof(USB_Descriptor_Interface_t),
@@ -136,6 +139,7 @@ const USB_Descriptor_Configuration_t EEMEM ConfigurationDescriptor =
                                                         ENDPOINT_USAGE_DATA),
         .EndpointSize       = DCI_TXRX_EPSIZE,
     },
+#endif
 
     .FreeJTAG_Interface = {
         .Header = {
@@ -157,9 +161,11 @@ const USB_Descriptor_String_t EEMEM LanguageString =
 const USB_Descriptor_String_t EEMEM ManufacturerString =
         USB_STRING_DESCRIPTOR(L"Jeff Kent <jeff@jkent.net>");
 const USB_Descriptor_String_t EEMEM ProductString =
-        USB_STRING_DESCRIPTOR(L"SRXE Basestation");
+        USB_STRING_DESCRIPTOR(L"FreeJTAG Reference Implementation");
+#if !defined(CONTROL_ONLY_DEVICE)
 const USB_Descriptor_String_t EEMEM DCIInterfaceString =
         USB_STRING_DESCRIPTOR(L"CDC ACM Interface");
+#endif
 const USB_Descriptor_String_t EEMEM FreeJTAGInterfaceString =
         USB_STRING_DESCRIPTOR(L"FreeJTAG Interface");
 
@@ -196,6 +202,7 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
             Address = &ProductString;
             Size    = ProductString.Header.Size;
             break;
+#if !defined(NO_INTERNAL_SERIAL)
         case STRING_ID_Serial: {
             struct {
                 USB_Descriptor_Header_t Header;
@@ -212,10 +219,13 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
             Endpoint_ClearOUT();
             break;
         }
+#endif
+#if !defined(CONTROL_ONLY_DEVICE)
         case STRING_ID_DCIInterface:
             Address = &DCIInterfaceString;
             Size    = DCIInterfaceString.Header.Size;
             break;
+#endif
         case STRING_ID_FreeJTAGInterface:
             Address = &FreeJTAGInterfaceString;
             Size    = FreeJTAGInterfaceString.Header.Size;

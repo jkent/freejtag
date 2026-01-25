@@ -39,7 +39,9 @@ typedef enum {
     FREEJTAG_REQ_EXECUTE,                   // OUT
     FREEJTAG_REQ_READBUF,                   // IN
     FREEJTAG_REQ_BULKBYTE,                  // OUT & IN
+#if !defined(MINI_FREEJTAG)
     FREEJTAG_REQ_READOCDR           = 0x80, // IN
+#endif
 } freejtag_req_t;
 
 typedef enum {
@@ -75,23 +77,17 @@ static void FreeJTAG_Shift(int bits, bool exit);
 static void FreeJTAG_ShiftOutBuf(int bits, bool exit);
 static void FreeJTAG_ShiftInBuf(int bits, bool exit);
 static void FreeJTAG_ShiftOutInBuf(int bits, bool exit);
-static uint32_t FreeJTAG_ShiftOutIn(int bits, uint32_t value);
 static void FreeJTAG_BulkWrite(void);
 static void FreeJTAG_BulkRead(void);
+#if !defined(MINI_FREEJTAG)
+static uint32_t FreeJTAG_ShiftOutIn(int bits, uint32_t value);
 static int16_t FreeJTAG_AVR_ReadOCDR(void);
+#endif
 
 void FreeJTAG_Init(void)
 {
     state = FREEJTAG_STATE_UNKNOWN;
     txlen = 0;
-}
-
-void FreeJTAG_Task(void)
-{
-}
-
-void FreeJTAG_Configure(void)
-{
 }
 
 void FreeJTAG_ControlRequest(void)
@@ -138,6 +134,7 @@ void FreeJTAG_ControlRequest(void)
             txlen = 0;
             break;
 
+#if !defined(MINI_FREEJTAG)
         case FREEJTAG_REQ_READOCDR: {
                 int16_t value = FreeJTAG_AVR_ReadOCDR();
                 Endpoint_ClearSETUP();
@@ -145,6 +142,7 @@ void FreeJTAG_ControlRequest(void)
                 Endpoint_ClearOUT();
             }
             break;
+#endif
         }
     } else {
         switch (USB_ControlRequest.bRequest) {
@@ -294,13 +292,6 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
             FREEJTAG_CLOCK();   /* RUNIDLE */
             break;
 
-        case FREEJTAG_STATE_DRCAPTURE:
-        case FREEJTAG_STATE_DRPAUSE:
-        case FREEJTAG_STATE_IRCAPTURE:
-        case FREEJTAG_STATE_IRPAUSE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* DREXIT2/IREXIT2 */
-
         case FREEJTAG_STATE_DREXIT1:
         case FREEJTAG_STATE_DREXIT2:
         case FREEJTAG_STATE_IREXIT1:
@@ -319,28 +310,6 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
         }
         break;
 
-    case FREEJTAG_STATE_DRCAPTURE:
-        switch (state) {
-        case FREEJTAG_STATE_RESET:
-            FREEJTAG_TMS(0);
-            FREEJTAG_CLOCK();   /* RUNIDLE */
-
-        case FREEJTAG_STATE_RUNIDLE:
-        case FREEJTAG_STATE_DRUPDATE:
-        case FREEJTAG_STATE_IRUPDATE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* DRSELECT */
-
-        case FREEJTAG_STATE_DRSELECT:
-            FREEJTAG_TMS(0);
-            FREEJTAG_CLOCK();   /* DRCAPTURE */
-            break;
-
-        default:
-            return;
-        }
-        break;
-
     case FREEJTAG_STATE_DRSHIFT:
         switch (state) {
         case FREEJTAG_STATE_RESET:
@@ -352,33 +321,15 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
         case FREEJTAG_STATE_IRUPDATE:
             FREEJTAG_TMS(1);
             FREEJTAG_CLOCK();   /* DRSELECT */
-
-        case FREEJTAG_STATE_DRSELECT:
             FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* DRCAPTURE */
-
-        case FREEJTAG_STATE_DRCAPTURE:
-            FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* DRSHIFT */
             break;
-
-        case FREEJTAG_STATE_DRPAUSE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* DREXIT2 */
 
         case FREEJTAG_STATE_DREXIT2:
             FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* DRSHIFT */
             break;
-
-        case FREEJTAG_STATE_IRSELECT:
-            FREEJTAG_TMS(0);
-            FREEJTAG_CLOCK();   /* IRCAPTURE */
-
-        case FREEJTAG_STATE_IRCAPTURE:
-        case FREEJTAG_STATE_IRPAUSE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* IREXIT1/IREXIT2 */
 
         case FREEJTAG_STATE_IREXIT1:
         case FREEJTAG_STATE_IREXIT2:
@@ -406,12 +357,8 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
         case FREEJTAG_STATE_IRUPDATE:
             FREEJTAG_TMS(1);
             FREEJTAG_CLOCK();   /* DRSELECT */
-
-        case FREEJTAG_STATE_DRSELECT:
             FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* DRCAPTURE */
-
-        case FREEJTAG_STATE_DRCAPTURE:
             FREEJTAG_TMS(1);
             FREEJTAG_CLOCK();   /* DREXIT1 */
 
@@ -419,15 +366,6 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
             FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* DRPAUSE */
             break;
-
-        case FREEJTAG_STATE_IRSELECT:
-            FREEJTAG_TMS(0);
-            FREEJTAG_CLOCK();   /* IRCAPTURE */
-
-        case FREEJTAG_STATE_IRCAPTURE:
-        case FREEJTAG_STATE_IRPAUSE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* IREXIT1/IREXIT2 */
 
         case FREEJTAG_STATE_IREXIT1:
         case FREEJTAG_STATE_IREXIT2:
@@ -449,46 +387,10 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
 
     case FREEJTAG_STATE_DRUPDATE:
         switch (state) {
-        case FREEJTAG_STATE_DRCAPTURE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* DREXIT1 */
-            FREEJTAG_CLOCK();   /* DRUPDATE */
-            break;
-
-        case FREEJTAG_STATE_DRPAUSE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* DREXIT2 */
-
         case FREEJTAG_STATE_DREXIT1:
         case FREEJTAG_STATE_DREXIT2:
             FREEJTAG_TMS(1);
             FREEJTAG_CLOCK();   /* DRUPDATE */
-            break;
-
-        default:
-            return;
-        }
-        break;
-
-    case FREEJTAG_STATE_IRCAPTURE:
-        switch (state) {
-        case FREEJTAG_STATE_RESET:
-            FREEJTAG_TMS(0);
-            FREEJTAG_CLOCK();   /* RUNIDLE */
-
-        case FREEJTAG_STATE_RUNIDLE:
-        case FREEJTAG_STATE_DRUPDATE:
-        case FREEJTAG_STATE_IRUPDATE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* DRSELECT */
-
-        case FREEJTAG_STATE_DRSELECT:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* IRSELECT */
-
-        case FREEJTAG_STATE_IRSELECT:
-            FREEJTAG_TMS(0);
-            FREEJTAG_CLOCK();   /* IRCAPTURE */
             break;
 
         default:
@@ -507,33 +409,16 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
         case FREEJTAG_STATE_IRUPDATE:
             FREEJTAG_TMS(1);
             FREEJTAG_CLOCK();   /* DRSELECT */
-
-        case FREEJTAG_STATE_DRSELECT:
-            FREEJTAG_TMS(1);
             FREEJTAG_CLOCK();   /* IRSELECT */
-
-        case FREEJTAG_STATE_IRSELECT:
             FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* IRCAPTURE */
-
-        case FREEJTAG_STATE_IRCAPTURE:
-            FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* IRSHIFT */
             break;
-
-        case FREEJTAG_STATE_IRPAUSE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* IREXIT2 */
 
         case FREEJTAG_STATE_IREXIT2:
             FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* IRSHIFT */
             break;
-
-        case FREEJTAG_STATE_DRCAPTURE:
-        case FREEJTAG_STATE_DRPAUSE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* DREXIT1/DREXIT2 */
 
         case FREEJTAG_STATE_DREXIT1:
         case FREEJTAG_STATE_DREXIT2:
@@ -562,16 +447,9 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
         case FREEJTAG_STATE_IRUPDATE:
             FREEJTAG_TMS(1);
             FREEJTAG_CLOCK();   /* DRSELECT */
-
-        case FREEJTAG_STATE_DRSELECT:
-            FREEJTAG_TMS(1);
             FREEJTAG_CLOCK();   /* IRSELECT */
-
-        case FREEJTAG_STATE_IRSELECT:
             FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* IRCAPTURE */
-
-        case FREEJTAG_STATE_IRCAPTURE:
             FREEJTAG_TMS(1);
             FREEJTAG_CLOCK();   /* IREXIT1 */
 
@@ -579,11 +457,6 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
             FREEJTAG_TMS(0);
             FREEJTAG_CLOCK();   /* IRPAUSE */
             break;
-
-        case FREEJTAG_STATE_DRCAPTURE:
-        case FREEJTAG_STATE_DRPAUSE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* DREXIT1/DREXIT2 */
 
         case FREEJTAG_STATE_DREXIT1:
         case FREEJTAG_STATE_DREXIT2:
@@ -606,16 +479,6 @@ static void FreeJTAG_SetState(freejtag_state_t new_state)
 
     case FREEJTAG_STATE_IRUPDATE:
         switch (state) {
-        case FREEJTAG_STATE_IRCAPTURE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* IREXIT1 */
-            FREEJTAG_CLOCK();   /* IRUPDATE */
-            break;
-
-        case FREEJTAG_STATE_IRPAUSE:
-            FREEJTAG_TMS(1);
-            FREEJTAG_CLOCK();   /* IREXIT2 */
-
         case FREEJTAG_STATE_IREXIT1:
         case FREEJTAG_STATE_IREXIT2:
             FREEJTAG_TMS(1);
@@ -787,34 +650,6 @@ static void FreeJTAG_ShiftOutInBuf(int bits, bool exit)
     txbuf[i] = byte;
 }
 
-static uint32_t FreeJTAG_ShiftOutIn(int bits, uint32_t value)
-{
-    int mask = 1ULL << (bits - 1);
-
-    for (int bit = 0; bit < bits - 1; bit++) {
-        FREEJTAG_TDI(value & 1);
-        value >>= 1;
-        if (FREEJTAG_TDO()) {
-            value |= mask;
-        } else {
-            value &= ~mask;
-        }
-        FREEJTAG_CLOCK();
-    }
-
-    FreeJTAG_ShiftExit();
-    FREEJTAG_TDI(value & 1);
-    value >>= 1;
-    if (FREEJTAG_TDO()) {
-        value |= mask;
-    } else {
-        value &= ~mask;
-    }
-    FREEJTAG_CLOCK();
-
-    return value & ((1ULL << bits) - 1);
-}
-
 static void FreeJTAG_BulkWrite(void)
 {
     uint8_t byte;
@@ -862,6 +697,35 @@ static void FreeJTAG_BulkRead(void)
     }
 }
 
+#if !defined(MINI_FREEJTAG)
+static uint32_t FreeJTAG_ShiftOutIn(int bits, uint32_t value)
+{
+    int mask = 1ULL << (bits - 1);
+
+    for (int bit = 0; bit < bits - 1; bit++) {
+        FREEJTAG_TDI(value & 1);
+        value >>= 1;
+        if (FREEJTAG_TDO()) {
+            value |= mask;
+        } else {
+            value &= ~mask;
+        }
+        FREEJTAG_CLOCK();
+    }
+
+    FreeJTAG_ShiftExit();
+    FREEJTAG_TDI(value & 1);
+    value >>= 1;
+    if (FREEJTAG_TDO()) {
+        value |= mask;
+    } else {
+        value &= ~mask;
+    }
+    FREEJTAG_CLOCK();
+
+    return value & ((1ULL << bits) - 1);
+}
+
 static int16_t FreeJTAG_AVR_ReadOCDR(void)
 {
     uint8_t ir;
@@ -896,3 +760,4 @@ static int16_t FreeJTAG_AVR_ReadOCDR(void)
 
     return value;
 }
+#endif

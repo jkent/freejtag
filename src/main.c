@@ -20,20 +20,24 @@ int main(void)
 
     USB_Init();
     FreeJTAG_Init();
+#if !defined(CONTROL_ONLY_DEVICE)
     CDCACM_Init();
+#endif
 
     GlobalInterruptEnable();
 
     while (true) {
-        FreeJTAG_Task();
+#if !defined(CONTROL_ONLY_DEVICE)
         CDCACM_Task();
+#endif
     }
 }
 
 void EVENT_USB_Device_ConfigurationChanged()
 {
-    FreeJTAG_Configure();
+#if !defined(CONTROL_ONLY_DEVICE)
     CDCACM_Configure();
+#endif
 }
 
 void EVENT_USB_Device_ControlRequest()

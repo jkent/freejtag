@@ -1,3 +1,9 @@
+/* SPDX-License-Identifier: MIT */
+/*
+ * FreeJTAG
+ * Copyright (C) 2026 Jeff Kent <jeff@jkent.net>
+ */
+
 #include <avr/io.h>
 #include <avr/power.h>
 #include <util/atomic.h>
@@ -9,6 +15,7 @@
 #include "descriptors.h"
 
 
+#if !defined(CONTROL_ONLY_DEVICE)
 #define CDCACM_BAUDRATE    500000
 
 static bool outstanding = false;
@@ -93,3 +100,4 @@ ISR(TIMER1_COMPA_vect)
         Endpoint_SelectEndpoint(ep);
     }
 }
+#endif

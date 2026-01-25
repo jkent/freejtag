@@ -11,6 +11,4 @@
 
 
 extern void FreeJTAG_Init(void);
-extern void FreeJTAG_Task(void);
-extern void FreeJTAG_Configure(void);
 extern void FreeJTAG_ControlRequest(void);

@@ -15,6 +15,7 @@
 typedef struct {
     USB_Descriptor_Configuration_Header_t   Config;
 
+#if !defined(CONTROL_ONLY_DEVICE)
 // CDC ACM Interfaces
 #define CCI_EPADDR                          (ENDPOINT_DIR_IN  | 5)
 #define CCI_EPSIZE                          8
@@ -30,6 +31,7 @@ typedef struct {
     USB_Descriptor_Interface_t              DCI_Interface;
     USB_Descriptor_Endpoint_t               DCI_DataOutEndpoint;
     USB_Descriptor_Endpoint_t               DCI_DataInEndpoint;
+#endif
 
 // FreeJTAG TAP Interface
     USB_Descriptor_Interface_t              FreeJTAG_Interface;
@@ -37,8 +39,10 @@ typedef struct {
 
 enum InterfaceDescriptors_t
 {
+#if !defined(CONTROL_ONLY_DEVICE)
     INTERFACE_ID_CCI,
     INTERFACE_ID_DCI,
+#endif
     INTERFACE_ID_FREEJTAG,
     INTERFACE_COUNT,
 };
@@ -48,7 +52,9 @@ enum StringDescriptors_t {
     STRING_ID_Manufacturer,
     STRING_ID_Product,
     STRING_ID_Serial,
+#if !defined(CONTROL_ONLY_DEVICE)
     STRING_ID_DCIInterface,
+#endif
     STRING_ID_FreeJTAGInterface,
 };
 

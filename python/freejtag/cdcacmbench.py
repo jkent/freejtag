@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT */
+#
+# FreeJTAG
+# Copyright (C) 2026 Jeff Kent <jeff@jkent.net>
 
 from random import randbytes
 from time import time
