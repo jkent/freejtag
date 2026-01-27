@@ -64,7 +64,7 @@ class FreeJTAG:
     STATE_IRUPDATE          = 0x0F
     STATE_UNKNOWN           = 0x10
 
-    def __init__(self, vid=0x0403, pid=0x7ab8, index=0):
+    def __init__(self, vid=0x0403, pid=0x7ba8, index=0):
         devices = tuple(usb.core.find(idVendor=vid, idProduct=pid, find_all=True))
         if not devices:
             raise Exception('No devices found')
@@ -76,7 +76,7 @@ class FreeJTAG:
 
         self._config: usb.core.Configuration = self._dev.get_active_configuration()
         interfaces = map(lambda i: self._config[(i, 0)], range(self._config.bNumInterfaces))
-        interfaces = tuple(filter(dev.match_interface_string_re(r'^FreeJTAG Interface$'), interfaces))
+        interfaces = tuple(filter(self.match_interface_string_re(r'^FreeJTAG Interface$'), interfaces))
         try:
             self._intf: usb.core.Interface = interfaces[0]
         except:
