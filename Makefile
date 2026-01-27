@@ -5,11 +5,10 @@ F_CPU        = 8000000
 F_USB        = $(F_CPU)
 OPTIMIZATION = s
 TARGET       = bin/firmware
-CC_FLAGS     = -Iinclude -DUSE_LUFA_CONFIG_HEADER
+CC_FLAGS     = -I. -Iinclude -DUSE_LUFA_CONFIG_HEADER
 LD_FLAGS     =
 SRC          =              \
 	$(LUFA_SRC_USB)         \
-	src/cdcacm.c            \
 	src/descriptors.c       \
 	src/freejtag.c          \
 	src/main.c              \
@@ -31,7 +30,8 @@ AVRDUDE_LOCK = 0xFF
 # Default target
 all:
 
-program: all avrdude
+program: program-all
+program-code: all avrdude
 program-all: all avrdude avrdude-ee avrdude-fuses
 
 # Setup paths

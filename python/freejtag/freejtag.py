@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT */
+# SPDX-License-Identifier: MIT
 #
 # FreeJTAG
 # Copyright (C) 2026 Jeff Kent <jeff@jkent.net>
 
 from sys import stderr
-from time import sleep
 
 import usb.core
 import usb.util
@@ -23,45 +22,6 @@ AVR_IR_PRIVATE2         = 10
 AVR_IR_PRIVATE3         = 11
 AVR_IR_RESET            = 12
 AVR_IR_BYPASS           = 15
-
-class CDCACM:
-    def __init__(self, dev):
-        self._dev: usb.core.Device = dev._dev
-        self._config: usb.core.Configuration = dev._config
-        interfaces = map(lambda i: self._config[(i, 0)], range(self._config.bNumInterfaces))
-        interfaces = filter(dev.match_interface_string_re(r'^CDC ACM Interface$'), interfaces)
-        try:
-            self._intf: usb.core.Interface = tuple(interfaces)[0]
-        except:
-            print('CDC ACM interface was not found', file=stderr)
-            exit(1)
-
-    def __enter__(self):
-        self._reattach = self._dev.is_kernel_driver_active(self._intf.bInterfaceNumber)
-        if self._reattach:
-            self._dev.detach_kernel_driver(self._intf.bInterfaceNumber)
-        usb.util.claim_interface(self._intf.device, self._intf)
-        self.ep_out = usb.util.find_descriptor(self._intf, custom_match = \
-                lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == \
-                usb.util.ENDPOINT_OUT)
-        self.ep_in = usb.util.find_descriptor(self._intf, custom_match = \
-                lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == \
-                usb.util.ENDPOINT_IN)
-        sleep(0.1)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.ep_out = None
-        self.ep_in = None
-        usb.util.release_interface(self._dev, self._intf)
-        if self._reattach:
-            self._dev.attach_kernel_driver(self._intf.bInterfaceNumber-1)
-
-    def write(self, data):
-        self.ep_out.write(data)
-
-    def read(self, count=4096):
-        return bytes(self.ep_in.read(count))
 
 class FreeJTAG:
     REQ_VERSION             = 0x00
@@ -104,16 +64,55 @@ class FreeJTAG:
     STATE_IRUPDATE          = 0x0F
     STATE_UNKNOWN           = 0x10
 
-    def __init__(self, dev):
-        self._dev: usb.core.Device = dev._dev
-        self._config: usb.core.Configuration = dev._config
+    def __init__(self, vid=0x0403, pid=0x7ab8, index=0):
+        devices = tuple(usb.core.find(idVendor=vid, idProduct=pid, find_all=True))
+        if not devices:
+            raise Exception('No devices found')
+
+        try:
+            self._dev: usb.core.Device = devices[index]
+        except IndexError:
+            raise Exception('Invalid FreeJTAG device index')
+
+        self._config: usb.core.Configuration = self._dev.get_active_configuration()
         interfaces = map(lambda i: self._config[(i, 0)], range(self._config.bNumInterfaces))
         interfaces = tuple(filter(dev.match_interface_string_re(r'^FreeJTAG Interface$'), interfaces))
         try:
             self._intf: usb.core.Interface = interfaces[0]
         except:
-            print('FreeJTAG interface was not found', file=stderr)
-            exit(1)
+            raise Exception('FreeJTAG interface was not found')
+
+    @staticmethod
+    def get_default_language_id(device: usb.core.Device):
+        try:
+            lang_id = usb.util.get_langids(device)[0]
+        except usb.core.USBError:
+            raise Exception('Error accessing device, check permissions')
+        return lang_id
+
+    @classmethod
+    def match_product_string_re(cls, pattern):
+        import re
+        def match(device: usb.core.Device):
+            if not device.iProduct:
+                return False
+            lang_id = cls.get_default_language_id(device)
+            string = usb.util.get_string(device, device.iProduct, lang_id)
+            m = re.search(pattern, string)
+            return bool(m)
+        return match
+
+    @classmethod
+    def match_interface_string_re(cls, pattern):
+        import re
+        def match(intf: usb.core.Interface):
+            if not intf.iInterface:
+                return False
+            lang_id = cls.get_default_language_id(intf.device)
+            string = usb.util.get_string(intf.device, intf.iInterface, lang_id)
+            m = re.search(pattern, string)
+            return bool(m)
+        return match
 
     def __enter__(self):
         usb.util.claim_interface(self._dev, self._intf)
@@ -260,96 +259,20 @@ class FreeJTAG:
             return None
         return bytes((ch,))
 
-class Device:
-    def __init__(self, vid=0x16c0, pid=0x27dd, index=0):
-        devices = tuple(usb.core.find(idVendor=vid, idProduct=pid, find_all=True))
-        if not tuple(devices):
-            print('No devices found', file=stderr)
-            exit(1)
-        devices = filter(self.match_serial_string_prefix('jkent.net'), devices)
-        devices = tuple(devices)
-        if not devices:
-            print('No devices found', file=stderr)
-            exit(1)
+    def get_signature(self):
+        jtag.shift_ir(4, AVR_IR_PROG_COMMANDS)
+        def read_byte(addr):
+            jtag.shift_dr(15, 0b0100011_00001000)
+            jtag.shift_dr(15, 0b0000011_00000000 | addr)
+            jtag.shift_dr(15, 0b0110010_00000000)
+            return jtag.shift_dr(15, 0b0110011_00000000, read=True) & 0xFF
 
-        try:
-            self._dev: usb.core.Device = devices[index]
-        except IndexError:
-            print('Invalid FreeJTAG device index', file=stderr)
-            exit(1)
-
-        self._config: usb.core.Configuration = self._dev.get_active_configuration()
-
-    def get_default_language_id(self, device: usb.core.Device):
-        try:
-            lang_id = usb.util.get_langids(device)[0]
-        except usb.core.USBError:
-            print('Error accessing device, check permissions', file=stderr)
-            exit(1)
-        return lang_id
-
-    def match_serial_string_prefix(self, prefix):
-        def match(device: usb.core.Device):
-            if not device.iSerialNumber:
-                return False
-            lang_id = self.get_default_language_id(device)
-            string = usb.util.get_string(device, device.iSerialNumber, lang_id)
-            return string.startswith(prefix + ':')
-        return match
-
-    def match_product_string_re(self, pattern):
-        import re
-        def match(device: usb.core.Device):
-            if not device.iProduct:
-                return False
-            lang_id = self.get_default_language_id(device)
-            string = usb.util.get_string(device, device.iProduct, lang_id)
-            m = re.search(pattern, string)
-            return bool(m)
-        return match
-
-    def match_interface_string_re(self, pattern):
-        import re
-        def match(intf: usb.core.Interface):
-            if not intf.iInterface:
-                return False
-            lang_id = self.get_default_language_id(intf.device)
-            string = usb.util.get_string(intf.device, intf.iInterface, lang_id)
-            m = re.search(pattern, string)
-            return bool(m)
-        return match
-
-    @property
-    def cdcacm(self):
-        if hasattr(self, '_cdcacm'):
-            return self._cdcacm
-        self._cdcacm = CDCACM(self)
-        return self._cdcacm
-
-    @property
-    def freejtag(self):
-        if hasattr(self, '_jtag'):
-            return self._jtag
-        self._jtag = FreeJTAG(self)
-        return self._jtag
-
-def read_signature(jtag: FreeJTAG):
-    jtag.shift_ir(4, AVR_IR_PROG_COMMANDS)
-    def read_byte(addr):
-        jtag.shift_dr(15, 0b0100011_00001000)
-        jtag.shift_dr(15, 0b0000011_00000000 | addr)
-        jtag.shift_dr(15, 0b0110010_00000000)
-        return jtag.shift_dr(15, 0b0110011_00000000, read=True) & 0xFF
-
-    signature = 0
-    for addr in range(3):
-        signature |= read_byte(addr) << (addr * 8)
-    return signature
+        return bytes(read_byte(addr) for addr in range(3))
 
 if __name__ == '__main__':
-    device = Device()
+    device = FreeJTAG()
 
-    with device.freejtag as jtag:
+    with device as jtag:
         print(jtag.version())
 
         jtag.shift_ir(4, AVR_IR_IDCODE)
@@ -362,8 +285,8 @@ if __name__ == '__main__':
         jtag.shift_ir(4, AVR_IR_PROG_ENABLE)
         jtag.shift_dr(16, 0xa370)
 
-        sig = read_signature(jtag).to_bytes(3, 'little')
-        print('Signature: ' + ' '.join(f'{byte:02X}' for byte in sig))
+        signature = jtag.get_signature(jtag)
+        print('Signature: ' + ' '.join(f'{byte:02X}' for byte in signature))
 
         jtag.shift_ir(4, AVR_IR_PROG_ENABLE)
         jtag.shift_dr(16, 0)
@@ -371,11 +294,7 @@ if __name__ == '__main__':
         jtag.shift_ir(4, AVR_IR_RESET)
         jtag.shift_dr(1, 0)
 
-    with device.cdcacm as serial:
-        serial.write(b'test')
-        print(serial.read())
-
-    with device.freejtag as jtag:
+    with device as jtag:
         while True:
             ch = jtag.avr_read_ocdr()
             if ch is not None:

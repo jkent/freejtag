@@ -15,21 +15,19 @@ const USB_Descriptor_Device_t EEMEM DeviceDescriptor =
     },
 
     .USBSpecification       = VERSION_BCD(1,1,0),
-    .Class                  = CDC_CSCP_CDCClass,
-    .SubClass               = CDC_CSCP_NoSpecificSubclass,
-    .Protocol               = CDC_CSCP_NoSpecificProtocol,
+    .Class                  = USB_CSCP_NoDeviceClass,
+    .SubClass               = USB_CSCP_NoDeviceSubclass,
+    .Protocol               = USB_CSCP_NoDeviceProtocol,
 
     .Endpoint0Size          = FIXED_CONTROL_ENDPOINT_SIZE,
 
     .VendorID               = VENDOR_ID,
     .ProductID              = PRODUCT_ID,
-    .ReleaseNumber          = VERSION_BCD(0,0,1),
+    .ReleaseNumber          = VERSION_BCD(3,0,0),
 
     .ManufacturerStrIndex   = STRING_ID_Manufacturer,
     .ProductStrIndex        = STRING_ID_Product,
-#if !defined(NO_INTERNAL_SERIAL)
-    .SerialNumStrIndex      = STRING_ID_Serial,
-#endif
+    .SerialNumStrIndex      = USE_INTERNAL_SERIAL,
 
     .NumberOfConfigurations = FIXED_NUM_CONFIGURATIONS
 };
@@ -42,104 +40,12 @@ const USB_Descriptor_Configuration_t EEMEM ConfigurationDescriptor =
             .Type    = DTYPE_Configuration,
         },
         .TotalConfigurationSize = sizeof(USB_Descriptor_Configuration_t),
-        .TotalInterfaces        = INTERFACE_COUNT,
+        .TotalInterfaces        = INTERFACE_ID_COUNT,
         .ConfigurationNumber    = 1,
         .ConfigurationStrIndex  = NO_DESCRIPTOR,
         .ConfigAttributes       = USB_CONFIG_ATTR_RESERVED,
         .MaxPowerConsumption    = USB_CONFIG_POWER_MA(100),
     },
-
-#if !defined(CONTROL_ONLY_DEVICE)
-    .CCI_Interface = {
-        .Header = {
-            .Size   = sizeof(USB_Descriptor_Interface_t),
-            .Type   = DTYPE_Interface,
-        },
-        .InterfaceNumber        = INTERFACE_ID_CCI,
-        .AlternateSetting       = 0,
-        .TotalEndpoints         = 1,
-        .Class                  = CDC_CSCP_CDCClass,
-        .SubClass               = CDC_CSCP_ACMSubclass,
-        .Protocol               = CDC_CSCP_NoDataProtocol,
-        .InterfaceStrIndex      = NO_DESCRIPTOR,
-    },
-
-    .CCI_Functional_Header = {
-        .Header = {
-            .Size   = sizeof(USB_CDC_Descriptor_FunctionalHeader_t),
-            .Type   = CDC_DTYPE_CSInterface,
-        },
-        .Subtype                = CDC_DSUBTYPE_CSInterface_Header,
-        .CDCSpecification       = VERSION_BCD(1,1,0),
-    },
-
-    .CCI_Functional_ACM = {
-        .Header = {
-            .Size   = sizeof(USB_CDC_Descriptor_FunctionalACM_t),
-            .Type   = CDC_DTYPE_CSInterface,
-        },
-        .Subtype                = CDC_DSUBTYPE_CSInterface_ACM,
-        .Capabilities           = 0,
-    },
-
-    .CCI_Functional_Union = {
-        .Header = {
-            .Size   = sizeof(USB_CDC_Descriptor_FunctionalUnion_t),
-            .Type   = CDC_DTYPE_CSInterface,
-        },
-        .Subtype                = CDC_DSUBTYPE_CSInterface_Union,
-        .MasterInterfaceNumber  = INTERFACE_ID_CCI,
-        .SlaveInterfaceNumber   = INTERFACE_ID_DCI,
-    },
-
-    .CCI_DataInEndpoint = {
-        .Header = {
-            .Size   = sizeof(USB_Descriptor_Endpoint_t),
-            .Type   = DTYPE_Endpoint,
-        },
-        .EndpointAddress    = CCI_EPADDR,
-        .Attributes         = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC |
-                                                        ENDPOINT_USAGE_DATA),
-        .EndpointSize       = CCI_EPSIZE,
-        .PollingIntervalMS  = 0xff,
-    },
-
-    .DCI_Interface = {
-        .Header = {
-            .Size   = sizeof(USB_Descriptor_Interface_t),
-            .Type   = DTYPE_Interface,
-        },
-        .InterfaceNumber    = INTERFACE_ID_DCI,
-        .AlternateSetting   = 0,
-        .TotalEndpoints     = 2,
-        .Class              = CDC_CSCP_CDCDataClass,
-        .SubClass           = CDC_CSCP_NoDataSubclass,
-        .Protocol           = CDC_CSCP_NoDataProtocol,
-        .InterfaceStrIndex  = STRING_ID_DCIInterface,
-    },
-
-    .DCI_DataOutEndpoint = {
-        .Header = {
-            .Size   = sizeof(USB_Descriptor_Endpoint_t),
-            .Type   = DTYPE_Endpoint,
-        },
-        .EndpointAddress    = DCI_RX_EPADDR,
-        .Attributes         = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC |
-                                                        ENDPOINT_USAGE_DATA),
-        .EndpointSize       = DCI_TXRX_EPSIZE,
-    },
-
-    .DCI_DataInEndpoint = {
-        .Header = {
-            .Size   = sizeof(USB_Descriptor_Endpoint_t),
-            .Type   = DTYPE_Endpoint,
-        },
-        .EndpointAddress    = DCI_TX_EPADDR,
-        .Attributes         = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC |
-                                                        ENDPOINT_USAGE_DATA),
-        .EndpointSize       = DCI_TXRX_EPSIZE,
-    },
-#endif
 
     .FreeJTAG_Interface = {
         .Header = {
@@ -162,10 +68,6 @@ const USB_Descriptor_String_t EEMEM ManufacturerString =
         USB_STRING_DESCRIPTOR(L"Jeff Kent <jeff@jkent.net>");
 const USB_Descriptor_String_t EEMEM ProductString =
         USB_STRING_DESCRIPTOR(L"FreeJTAG Reference Implementation");
-#if !defined(CONTROL_ONLY_DEVICE)
-const USB_Descriptor_String_t EEMEM DCIInterfaceString =
-        USB_STRING_DESCRIPTOR(L"CDC ACM Interface");
-#endif
 const USB_Descriptor_String_t EEMEM FreeJTAGInterfaceString =
         USB_STRING_DESCRIPTOR(L"FreeJTAG Interface");
 
@@ -202,30 +104,6 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
             Address = &ProductString;
             Size    = ProductString.Header.Size;
             break;
-#if !defined(NO_INTERNAL_SERIAL)
-        case STRING_ID_Serial: {
-            struct {
-                USB_Descriptor_Header_t Header;
-                uint16_t UnicodeString[INTERNAL_SERIAL_LENGTH_BITS / 4 + 20];
-            } SignatureDescriptor;
-            SignatureDescriptor.Header.Type = DTYPE_String;
-            SignatureDescriptor.Header.Size =
-                    USB_STRING_LEN(INTERNAL_SERIAL_LENGTH_BITS / 4);
-            memcpy(SignatureDescriptor.UnicodeString, L"jkent.net:", 20);
-            USB_Device_GetSerialString(SignatureDescriptor.UnicodeString + 10);
-            Endpoint_ClearSETUP();
-            Endpoint_Write_Control_Stream_LE(&SignatureDescriptor,
-                    sizeof(SignatureDescriptor));
-            Endpoint_ClearOUT();
-            break;
-        }
-#endif
-#if !defined(CONTROL_ONLY_DEVICE)
-        case STRING_ID_DCIInterface:
-            Address = &DCIInterfaceString;
-            Size    = DCIInterfaceString.Header.Size;
-            break;
-#endif
         case STRING_ID_FreeJTAGInterface:
             Address = &FreeJTAGInterfaceString;
             Size    = FreeJTAGInterfaceString.Header.Size;
