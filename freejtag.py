@@ -270,9 +270,9 @@ class FreeJTAG:
         return bytes(read_byte(addr) for addr in range(3))
 
 if __name__ == '__main__':
-    device = FreeJTAG()
+    freejtag = FreeJTAG()
 
-    with device as jtag:
+    with freejtag as jtag:
         print(jtag.version())
 
         jtag.shift_ir(4, AVR_IR_IDCODE)
@@ -294,7 +294,8 @@ if __name__ == '__main__':
         jtag.shift_ir(4, AVR_IR_RESET)
         jtag.shift_dr(1, 0)
 
-    with device as jtag:
+    with freejtag as jtag:
+        print('JTAG Console:')
         while True:
             ch = jtag.avr_read_ocdr()
             if ch is not None:

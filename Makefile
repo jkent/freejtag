@@ -29,9 +29,10 @@ AVRDUDE_LOCK = 0xFF
 
 # Default target
 all:
+program: program-dev
+release: program-all
 
-program: program-all
-program-code: all avrdude
+program-dev: all avrdude
 program-all: all avrdude avrdude-ee avrdude-fuses
 
 # Setup paths
