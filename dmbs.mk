@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: MIT
+#
+# FreeJTAG
+# Copyright (C) 2026 Jeff Kent <jeff@jkent.net>
+
 # Include Guard
 ifeq ($(filter FREEJTAG, $(DMBS_BUILD_MODULES)),)
 

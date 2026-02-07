@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: MIT
+#
+# FreeJTAG
+# Copyright (C) 2026 Jeff Kent <jeff@jkent.net>
+
 Q            = @
 MCU          = atmega16u2
 ARCH         = AVR8
