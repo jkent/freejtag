@@ -33,7 +33,7 @@ DMBS_BUILD_PROVIDED_MACROS +=
 # Sanity check user supplied values
 $(foreach MANDATORY_VAR, $(DMBS_BUILD_MANDATORY_VARS), $(call ERROR_IF_UNSET, $(MANDATORY_VAR)))
 
-# Common srxe source
+# Common freejtag source
 FREEJTAG_SRC :=     \
     freejtag.c      \
 
