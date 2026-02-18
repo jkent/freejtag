@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyjtag"
+description = "PyJTAG package"
+readme = "README.md"
+version = "0.0.1"
+license = "MIT"
+authors = [
+    {name = "Jeff Kent", email = "jeff@jkent.net"},
+]
+maintainers = [
+    {name = "Jeff Kent", email = "jeff@jkent.net"},
+]
+requires-python = ">= 3.11.2"
+dependencies = [
+    "click >= 8.3.1",
+    "pyusb >= 1.3.1",
+]
+
+[project.scripts]
+pyjtag = "pyjtag.jtag:main"
+ocdterm = "pyjtag.ocdterm:main"

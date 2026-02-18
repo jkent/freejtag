@@ -2,6 +2,7 @@ bin/
 obj/
 .venv/
 __pycache__/
+*.egg-info/
 *.pyc
 *.pyd
 *.pyo

@@ -9,21 +9,9 @@ from sys import stderr
 import usb.core
 import usb.util
 
-AVR_IR_EXTEST           = 0
-AVR_IR_IDCODE           = 1
-AVR_IR_SAMPLE_PAYLOAD   = 2
-AVR_IR_PROG_ENABLE      = 4
-AVR_IR_PROG_COMMANDS    = 5
-AVR_IR_PROG_PAGELOAD    = 6
-AVR_IR_PROG_PAGEREAD    = 7
-AVR_IR_PRIVATE0         = 8
-AVR_IR_PRIVATE1         = 9
-AVR_IR_PRIVATE2         = 10
-AVR_IR_PRIVATE3         = 11
-AVR_IR_RESET            = 12
-AVR_IR_BYPASS           = 15
+from ..jtag import JTAG
 
-class FreeJTAG:
+class Backend:
     REQ_VERSION             = 0x00
     REQ_RESET               = 0x01
     REQ_EXECUTE             = 0x02
@@ -46,25 +34,11 @@ class FreeJTAG:
     CMD_SHIFT_OUTIN         = 0xC0
     CMD_SHIFT_OUTIN_EXIT    = 0xC1
 
-    STATE_RESET             = 0x00
-    STATE_RUNIDLE           = 0x01
-    STATE_DRSELECT          = 0x02
-    STATE_DRCAPTURE         = 0x03
-    STATE_DRSHIFT           = 0x04
-    STATE_DREXIT1           = 0x05
-    STATE_DRPAUSE           = 0x06
-    STATE_DREXIT2           = 0x07
-    STATE_DRUPDATE          = 0x08
-    STATE_IRSELECT          = 0x09
-    STATE_IRCAPTURE         = 0x0A
-    STATE_IRSHIFT           = 0x0B
-    STATE_IREXIT1           = 0x0C
-    STATE_IRPAUSE           = 0x0D
-    STATE_IREXIT2           = 0x0E
-    STATE_IRUPDATE          = 0x0F
-    STATE_UNKNOWN           = 0x10
+    def __init__(self, **kwargs):
+        vid = kwargs.get('vid') or 0x0403
+        pid = kwargs.get('pid') or 0x7ba8
+        index = kwargs.get('index') or 0
 
-    def __init__(self, vid=0x0403, pid=0x7ba8, index=0):
         devices = tuple(usb.core.find(idVendor=vid, idProduct=pid, find_all=True))
         if not devices:
             raise Exception('No devices found')
@@ -114,12 +88,11 @@ class FreeJTAG:
             return bool(m)
         return match
 
-    def __enter__(self):
+    def _acquire(self):
         usb.util.claim_interface(self._dev, self._intf)
         self._attach(True)
-        return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def _release(self):
         self._attach(False)
         usb.util.release_interface(self._dev, self._intf)
 
@@ -194,35 +167,7 @@ class FreeJTAG:
         data = self._readbuf(n_bytes)
         return int.from_bytes(data, 'little') & ((1 << bits) - 1)
 
-    def shift_ir(self, total_bits, value=None, read=False) -> None | int:
-        result = None
-        self.set_state(self.STATE_IRSHIFT)
-        if value is None and not read:
-           self.shift(total_bits)
-        elif value is not None and not read:
-           self.shift_out(total_bits, value)
-        elif value is None and read:
-           result = self.shift_in(total_bits)
-        elif value is not None and read:
-           result = self.shift_outin(total_bits, value)
-        self.set_state(self.STATE_RUNIDLE)
-        return result
-
-    def shift_dr(self, total_bits, value=None, read=False) -> None | int:
-        result = None
-        self.set_state(self.STATE_DRSHIFT)
-        if value is None and not read:
-            self.shift(total_bits)
-        elif value is not None and not read:
-            self.shift_out(total_bits, value)
-        elif value is None and read:
-            result = self.shift_in(total_bits)
-        elif value is not None and read:
-            result = self.shift_outin(total_bits, value)
-        self.set_state(self.STATE_RUNIDLE)
-        return result
-
-    def write_bytes(self, data: bytes) -> None:
+    def bulk_write_bytes(self, data: bytes) -> None:
         bmRequestType = usb.util.build_request_type(
             usb.util.CTRL_OUT,
             usb.util.CTRL_TYPE_VENDOR,
@@ -258,46 +203,3 @@ class FreeJTAG:
         if ch < 0:
             return None
         return bytes((ch,))
-
-    def get_signature(self):
-        jtag.shift_ir(4, AVR_IR_PROG_COMMANDS)
-        def read_byte(addr):
-            jtag.shift_dr(15, 0b0100011_00001000)
-            jtag.shift_dr(15, 0b0000011_00000000 | addr)
-            jtag.shift_dr(15, 0b0110010_00000000)
-            return jtag.shift_dr(15, 0b0110011_00000000, read=True) & 0xFF
-
-        return bytes(read_byte(addr) for addr in range(3))
-
-if __name__ == '__main__':
-    freejtag = FreeJTAG()
-
-    with freejtag as jtag:
-        print(jtag.version())
-
-        jtag.shift_ir(4, AVR_IR_IDCODE)
-        idcode = jtag.shift_dr(32, read=True)
-        print(f'IDCODE = 0x{idcode:08X}')
-
-        jtag.shift_ir(4, AVR_IR_RESET)
-        jtag.shift_dr(1, 1)
-
-        jtag.shift_ir(4, AVR_IR_PROG_ENABLE)
-        jtag.shift_dr(16, 0xa370)
-
-        signature = jtag.get_signature(jtag)
-        print('Signature: ' + ' '.join(f'{byte:02X}' for byte in signature))
-
-        jtag.shift_ir(4, AVR_IR_PROG_ENABLE)
-        jtag.shift_dr(16, 0)
-
-        jtag.shift_ir(4, AVR_IR_RESET)
-        jtag.shift_dr(1, 0)
-
-    with freejtag as jtag:
-        print('JTAG Console:')
-        while True:
-            ch = jtag.avr_read_ocdr()
-            if ch is not None:
-                stderr.buffer.write(ch)
-                stderr.buffer.flush()
