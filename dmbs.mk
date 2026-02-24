@@ -38,7 +38,7 @@ FREEJTAG_SRC :=     \
     freejtag.c      \
 
 # Compiler flags and sources
-SRC			       += $(patsubst %,$(FREEJTAG_MODULE_PATH)/%,src/$(FREEJTAG_SRC))
+SRC			       += $(patsubst %,$(FREEJTAG_MODULE_PATH)%,src/$(FREEJTAG_SRC))
 
 CC_FLAGS 	       += -I$(FREEJTAG_MODULE_PATH)/include
 
