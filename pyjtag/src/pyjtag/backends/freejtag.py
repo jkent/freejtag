@@ -35,34 +35,50 @@ class Backend:
     CMD_SHIFT_OUTIN_EXIT    = 0xC1
 
     def __init__(self, **kwargs):
-        vid = kwargs.get('vid') or 0x0403
-        pid = kwargs.get('pid') or 0x7ba8
         index = kwargs.get('index') or 0
 
-        devices = tuple(usb.core.find(idVendor=vid, idProduct=pid, find_all=True))
-        if not devices:
-            raise Exception('No devices found')
-
+        devices = self.get_devices(**kwargs)
         try:
-            self._dev: usb.core.Device = devices[index]
+            self._device = devices[index]
         except IndexError:
-            raise Exception('Invalid FreeJTAG device index')
+            raise RuntimeError('Invalid FreeJTAG device index')
+        self._config = self._device.get_active_configuration()
+        self._intf = self.get_freejtag_intf(self._device)
 
-        self._config: usb.core.Configuration = self._dev.get_active_configuration()
-        interfaces = map(lambda i: self._config[(i, 0)], range(self._config.bNumInterfaces))
-        interfaces = tuple(filter(self.match_interface_string_re(r'^FreeJTAG Interface$'), interfaces))
+    @classmethod
+    def get_devices(cls, **kwargs):
+        vid = kwargs.get('vid') or 0x0403
+        pid = kwargs.get('pid') or 0x7ba8
+        devices = usb.core.find(idVendor=vid, idProduct=pid, find_all=True)
+        if not devices:
+            raise RuntimeError('No devices found')
+
+        return tuple(filter(cls.get_freejtag_intf, devices))
+
+    @classmethod
+    def get_freejtag_intf(cls, device):
+        config = device.get_active_configuration()
+        intfs = map(lambda i: config[(i, 0)], range(config.bNumInterfaces))
+        intfs = filter(cls.match_intf_string_re(r'^FreeJTAG Interface$'), intfs)
         try:
-            self._intf: usb.core.Interface = interfaces[0]
-        except:
-            raise Exception('FreeJTAG interface was not found')
+            return next(intfs)
+        except StopIteration:
+            return None
 
     @staticmethod
-    def get_default_language_id(device: usb.core.Device):
+    def get_default_langid(device: usb.core.Device):
         try:
-            lang_id = usb.util.get_langids(device)[0]
+            langid = usb.util.get_langids(device)[0]
         except usb.core.USBError:
             raise Exception('Error accessing device, check permissions')
-        return lang_id
+        return langid
+
+    @classmethod
+    def get_sn(cls, device):
+        if not device.iSerialNumber:
+            return None
+        langid = cls.get_default_langid(device)
+        return usb.util.get_string(device, device.iSerialNumber, langid)
 
     @classmethod
     def match_product_string_re(cls, pattern):
@@ -70,38 +86,38 @@ class Backend:
         def match(device: usb.core.Device):
             if not device.iProduct:
                 return False
-            lang_id = cls.get_default_language_id(device)
-            string = usb.util.get_string(device, device.iProduct, lang_id)
+            langid = cls.get_default_langid(device)
+            string = usb.util.get_string(device, device.iProduct, langid)
             m = re.search(pattern, string)
             return bool(m)
         return match
 
     @classmethod
-    def match_interface_string_re(cls, pattern):
+    def match_intf_string_re(cls, pattern):
         import re
         def match(intf: usb.core.Interface):
             if not intf.iInterface:
                 return False
-            lang_id = cls.get_default_language_id(intf.device)
-            string = usb.util.get_string(intf.device, intf.iInterface, lang_id)
+            langid = cls.get_default_langid(intf.device)
+            string = usb.util.get_string(intf.device, intf.iInterface, langid)
             m = re.search(pattern, string)
             return bool(m)
         return match
 
     def _acquire(self):
-        usb.util.claim_interface(self._dev, self._intf)
+        usb.util.claim_interface(self._device, self._intf)
         self._attach(True)
 
     def _release(self):
         self._attach(False)
-        usb.util.release_interface(self._dev, self._intf)
+        usb.util.release_interface(self._device, self._intf)
 
     def version(self):
         bmRequestType = usb.util.build_request_type(
             usb.util.CTRL_IN,
             usb.util.CTRL_TYPE_VENDOR,
             usb.util.CTRL_RECIPIENT_INTERFACE)
-        data = self._dev.ctrl_transfer(bmRequestType, self.REQ_VERSION, 0,
+        data = self._device.ctrl_transfer(bmRequestType, self.REQ_VERSION, 0,
                 self._intf.bInterfaceNumber, 2)
         value = int.from_bytes(data, 'little')
         major = (value & 0xFF00) >> 8
@@ -115,7 +131,7 @@ class Backend:
             usb.util.CTRL_TYPE_VENDOR,
             usb.util.CTRL_RECIPIENT_INTERFACE)
         wValue = (arg << 8) | (cmd & 0xff)
-        self._dev.ctrl_transfer(bmRequestType, self.REQ_EXECUTE, wValue,
+        self._device.ctrl_transfer(bmRequestType, self.REQ_EXECUTE, wValue,
                 self._intf.bInterfaceNumber, data)
 
     def _readbuf(self, wLength):
@@ -123,7 +139,7 @@ class Backend:
             usb.util.CTRL_IN,
             usb.util.CTRL_TYPE_VENDOR,
             usb.util.CTRL_RECIPIENT_INTERFACE)
-        return self._dev.ctrl_transfer(bmRequestType, self.REQ_READBUF, 0,
+        return self._device.ctrl_transfer(bmRequestType, self.REQ_READBUF, 0,
                 self._intf.bInterfaceNumber, wLength)
 
     def _attach(self, attach=True):
@@ -176,7 +192,7 @@ class Backend:
             chunk, data = data[:32], data[32:]
             if not chunk:
                 break
-            self._dev.ctrl_transfer(bmRequestType, self.REQ_BULKBYTE, 0,
+            self._device.ctrl_transfer(bmRequestType, self.REQ_BULKBYTE, 0,
                     self._intf.bInterfaceNumber, chunk)
 
     def bulk_read_bytes(self, count: int) -> bytes:
@@ -187,7 +203,7 @@ class Backend:
         data = b''
         while count > 0:
             chunk = min(32, count)
-            data += self._dev.ctrl_transfer(bmRequestType, self.REQ_BULKBYTE, 0,
+            data += self._device.ctrl_transfer(bmRequestType, self.REQ_BULKBYTE, 0,
                     self._intf.bInterfaceNumber, chunk)
             count -= chunk
         return data
@@ -197,7 +213,7 @@ class Backend:
             usb.util.CTRL_IN,
             usb.util.CTRL_TYPE_VENDOR,
             usb.util.CTRL_RECIPIENT_INTERFACE)
-        data = self._dev.ctrl_transfer(bmRequestType, self.REQ_READOCDR, 0,
+        data = self._device.ctrl_transfer(bmRequestType, self.REQ_READOCDR, 0,
                 self._intf.bInterfaceNumber, 2)
         ch = int.from_bytes(data, 'little', signed=True)
         if ch < 0:
